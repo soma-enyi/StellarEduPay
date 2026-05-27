@@ -7,22 +7,18 @@ const { concurrentPaymentProcessor } = require('../services/concurrentPaymentPro
 const { getReminderStatus } = require('../services/reminderService');
 const logger = require('../utils/logger');
 
-const STELLAR_CHECK_TIMEOUT_MS = Math.min(config.STELLAR_TIMEOUT_MS, 5000);
+const STELLAR_CHECK_TIMEOUT_MS = 3000; // 3 second timeout for Stellar health check
 
 async function checkStellar() {
   const start = Date.now();
-  const timer = setTimeout(() => {}, STELLAR_CHECK_TIMEOUT_MS);
   try {
-    const stellarPromise = server.serverInfo();
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error(`Horizon did not respond within ${STELLAR_CHECK_TIMEOUT_MS}ms`)), STELLAR_CHECK_TIMEOUT_MS)
     );
-    await Promise.race([stellarPromise, timeoutPromise]);
-    clearTimeout(timer);
-    return { status: 'healthy', latency_ms: Date.now() - start };
+    await Promise.race([server.ledgers().limit(1).call(), timeoutPromise]);
+    return { status: 'ok', latencyMs: Date.now() - start };
   } catch (err) {
-    clearTimeout(timer);
-    return { status: 'unhealthy', error: err.message, latency_ms: Date.now() - start };
+    return { status: 'unreachable', error: err.message, latencyMs: Date.now() - start };
   }
 }
 
@@ -40,9 +36,22 @@ async function healthCheck(req, res) {
   const stellar =
     stellarResult.status === 'fulfilled'
       ? stellarResult.value
-      : { status: 'unhealthy', error: stellarResult.reason?.message };
+      : { status: 'unreachable', error: stellarResult.reason?.message };
 
-  const allHealthy = db.healthy === true && stellar.status === 'healthy';
+  // Determine overall status:
+  // - healthy: DB is up AND Stellar is ok
+  // - degraded: DB is up BUT Stellar is unreachable
+  // - unhealthy: DB is down
+  let overallStatus = 'healthy';
+  let statusCode = 200;
+
+  if (db.healthy !== true) {
+    overallStatus = 'unhealthy';
+    statusCode = 503;
+  } else if (stellar.status !== 'ok') {
+    overallStatus = 'degraded';
+    statusCode = 200; // Still return 200 since DB is up and cached data can be served
+  }
 
   const { queueDepth, maxQueueDepth } = concurrentPaymentProcessor.getStats();
 
@@ -52,7 +61,7 @@ async function healthCheck(req, res) {
   const redisConfigured = Boolean(process.env.REDIS_HOST);
 
   const body = {
-    status: allHealthy ? 'healthy' : 'degraded',
+    status: overallStatus,
     timestamp: new Date().toISOString(),
     logLevel: logger.getLevel(),
     checks: {
@@ -63,7 +72,9 @@ async function healthCheck(req, res) {
         ...(db.reason && { error: db.reason }),
       },
       stellar: {
-        ...stellar,
+        status: stellar.status,
+        ...(stellar.latencyMs !== undefined && { latency_ms: stellar.latencyMs }),
+        ...(stellar.error && { error: stellar.error }),
         network: config.STELLAR_NETWORK,
         horizonUrl: config.HORIZON_URL,
       },
@@ -80,7 +91,7 @@ async function healthCheck(req, res) {
     },
   };
 
-  return res.status(allHealthy ? 200 : 503).json(body);
+  return res.status(statusCode).json(body);
 }
 
 module.exports = { healthCheck };
