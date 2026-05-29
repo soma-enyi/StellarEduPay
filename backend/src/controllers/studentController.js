@@ -677,4 +677,30 @@ async function reconcileStudent(req, res, next) {
   }
 }
 
-module.exports = { registerStudent, getAllStudents, getStudent, updateStudent, deleteStudent, getPaymentSummary, bulkImportStudents, getOverdueStudents, resetPayment, reconcileStudent };
+async function getFeeHistory(req, res, next) {
+  try {
+    const { schoolId } = req;
+    const { studentId } = req.params;
+
+    const student = await Student.findOne({ schoolId, studentId, deletedAt: null });
+    if (!student)
+      return res.status(404).json({ error: 'Student not found', code: 'NOT_FOUND' });
+
+    const StudentFeeHistory = require('../models/studentFeeHistoryModel');
+    const archived = await StudentFeeHistory
+      .find({ schoolId, studentId })
+      .sort({ archivedAt: -1 })
+      .lean();
+
+    return res.json({
+      studentId,
+      activeFees: student.fees || [],
+      archivedFees: archived,
+      total: (student.fees?.length || 0) + archived.length,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { registerStudent, getAllStudents, getStudent, updateStudent, deleteStudent, getPaymentSummary, bulkImportStudents, getOverdueStudents, resetPayment, reconcileStudent, getFeeHistory };

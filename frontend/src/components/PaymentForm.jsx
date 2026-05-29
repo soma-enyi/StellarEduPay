@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { generateStellarPaymentUri } from "../utils/stellarUri";
-import { getStudent, getPaymentInstructions, getStudentPayments } from "../services/api";
+import { getStudent, getPaymentInstructions, getStudentPayments, getStudentBalance } from "../services/api";
 import DisputeForm from "./DisputeForm";
 
 const STATUS_STYLE = {
@@ -20,6 +20,7 @@ export default function PaymentForm() {
   const [error, setError]             = useState("");
   const [loading, setLoading]         = useState(false);
   const [copied, setCopied]           = useState(null);
+  const [hasDeletedPayments, setHasDeletedPayments] = useState(false);
   const [disputingTx, setDisputingTx] = useState(null); // txHash currently being disputed
   const [disputedTxs, setDisputedTxs] = useState(new Set()); // txHashes with open disputes
   const errorRef = useRef(null);
@@ -39,18 +40,20 @@ export default function PaymentForm() {
 
   const lookupStudent = useCallback(async (id) => {
     if (!id.trim()) return;
-    setError(""); setStudent(null); setInstructions(null); setPayments(null);
+    setError(""); setStudent(null); setInstructions(null); setPayments(null); setHasDeletedPayments(false);
     setLoading(true);
     setPaymentsLoading(true);
     try {
-      const [stuRes, instrRes, payRes] = await Promise.all([
+      const [stuRes, instrRes, payRes, balRes] = await Promise.all([
         getStudent(id),
         getPaymentInstructions(id),
         getStudentPayments(id),
+        getStudentBalance(id).catch(() => null),
       ]);
       setStudent(stuRes.data);
       setInstructions(instrRes.data);
       setPayments(payRes.data?.payments ?? payRes.data ?? []);
+      setHasDeletedPayments(balRes?.data?.hasDeletedPayments === true);
     } catch (err) {
       setError(err.response?.data?.error || "Student not found. Please check the ID and try again.");
       errorRef.current?.focus();
@@ -123,6 +126,16 @@ export default function PaymentForm() {
             {isTestnet && (
               <div style={{ background: "#fef9c3", border: "1px solid #fde68a", borderRadius: 6, padding: "0.6rem 0.9rem", fontSize: "0.8rem", color: "#854d0e", marginBottom: "1.25rem" }}>
                 ⚠️ Testnet mode — do not send real funds.
+              </div>
+            )}
+
+            {hasDeletedPayments && (
+              <div
+                role="alert"
+                title="This student has deleted payment records that are not included in this balance."
+                style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 6, padding: "0.6rem 0.9rem", fontSize: "0.8rem", color: "#9a3412", marginBottom: "1.25rem", cursor: "help" }}
+              >
+                ⚠️ This student has deleted payment records that are not included in the balance shown below.
               </div>
             )}
 

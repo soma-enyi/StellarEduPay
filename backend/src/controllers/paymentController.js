@@ -961,16 +961,21 @@ async function getStudentBalance(req, res, next) {
         .status(404)
         .json({ error: "Student not found", code: "NOT_FOUND" });
 
-    const result = await Payment.aggregate([
-      { $match: { schoolId, studentId, deletedAt: null } },
-      {
-        $group: {
-          _id: null,
-          totalPaid: { $sum: "$amount" },
-          count: { $sum: 1 },
+    const [result, deletedCount] = await Promise.all([
+      Payment.aggregate([
+        { $match: { schoolId, studentId, deletedAt: null } },
+        {
+          $group: {
+            _id: null,
+            totalPaid: { $sum: "$amount" },
+            count: { $sum: 1 },
+          },
         },
-      },
+      ]),
+      Payment.countDocuments({ schoolId, studentId, deletedAt: { $ne: null } }),
     ]);
+
+    const hasDeletedPayments = deletedCount > 0;
 
     const totalPaid = result.length
       ? parseFloat(result[0].totalPaid.toFixed(7))
@@ -1055,6 +1060,9 @@ async function getStudentBalance(req, res, next) {
         totalPaid: buildLocal(paidConv),
         remainingBalance: buildLocal(remainingConv),
       },
+      // true when soft-deleted payments exist but are excluded from totalPaid.
+      // The UI should surface a warning so admins aren't confused by the discrepancy.
+      hasDeletedPayments,
     });
   } catch (err) {
     next(err);

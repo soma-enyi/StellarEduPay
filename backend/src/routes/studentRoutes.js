@@ -14,6 +14,7 @@ const {
   getOverdueStudents,
   resetPayment,
   reconcileStudent,
+  getFeeHistory,
 } = require('../controllers/studentController');
 const { resubscribeReminders } = require('../controllers/reminderController');
 const { validateRegisterStudent, validateStudentIdParam } = require('../middleware/validate');
@@ -40,5 +41,6 @@ router.delete('/:studentId', requireAdminAuth, validateStudentIdParam, deleteStu
 router.post('/:studentId/reset-payment', requireAdminAuth, validateStudentIdParam, resetPayment);
 router.post('/:studentId/reconcile', requireAdminAuth, validateStudentIdParam, reconcileStudent);
 router.post('/:studentId/reminders/resubscribe', requireAdminAuth, validateStudentIdParam, resubscribeReminders);
+router.get('/:studentId/fee-history', requireAdminAuth, validateStudentIdParam, getFeeHistory);
 
 module.exports = router;

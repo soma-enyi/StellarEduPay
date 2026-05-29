@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { verifyPayment } from "../services/api";
+import { parseStellarError } from "../utils/stellarErrors";
 
 const STATUS_STYLE = {
   valid:     { color: "#166534", bg: "#dcfce7" },
@@ -12,17 +13,25 @@ export default function VerifyPayment() {
   const [txHash, setTxHash] = useState("");
   const [result, setResult] = useState(null);
   const [error, setError]   = useState("");
+  const [stellarStatusUrl, setStellarStatusUrl] = useState(null);
   const [loading, setLoading] = useState(false);
   const errorRef = useRef(null);
 
   async function handleSubmit(e) {
     e.preventDefault();
-    setError(""); setResult(null); setLoading(true);
+    setError(""); setResult(null); setStellarStatusUrl(null); setLoading(true);
     try {
       const res = await verifyPayment(txHash.trim());
       setResult(res.data);
     } catch (err) {
-      setError(err.response?.data?.error || "Verification failed. Check the transaction hash and try again.");
+      const stellar = parseStellarError(err);
+      if (stellar) {
+        setError(stellar.message);
+        setStellarStatusUrl(stellar.stellarStatusUrl);
+      } else {
+        setError(err.response?.data?.error || "Verification failed. Check the transaction hash and try again.");
+        setStellarStatusUrl(null);
+      }
       errorRef.current?.focus();
     } finally {
       setLoading(false);
@@ -68,6 +77,12 @@ export default function VerifyPayment() {
           <div ref={errorRef} role="alert" tabIndex="-1"
             style={{ marginTop: "1rem", padding: "0.75rem 1rem", background: "#fee2e2", border: "1px solid #fecaca", borderRadius: 8, color: "#991b1b", fontSize: "0.875rem" }}>
             {error}
+            {stellarStatusUrl && (
+              <a href={stellarStatusUrl} target="_blank" rel="noopener noreferrer"
+                style={{ display: "block", marginTop: "0.5rem", color: "#991b1b", fontWeight: 600, textDecoration: "underline" }}>
+                Check Stellar Network Status ↗
+              </a>
+            )}
           </div>
         )}
 
