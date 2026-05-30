@@ -34,6 +34,7 @@ export const updateStudent = (studentId, data) => api.patch(`/students/${student
 export const getPaymentSummary = () => api.get("/payments/summary");
 export const getPaymentInstructions = (studentId) => api.get(`/payments/instructions/${studentId}`);
 export const getStudentPayments = (studentId) => api.get(`/payments/${studentId}`);
+export const getStudentBalance  = (studentId) => api.get(`/payments/balance/${studentId}`);
 export const verifyPayment = (txHash) => api.post("/payments/verify", { txHash });
 export const syncPayments = () => api.post("/payments/sync");
 export const getSyncStatus = () => api.get("/payments/sync/status");
