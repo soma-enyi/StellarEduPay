@@ -313,11 +313,15 @@ function streamPaymentEvents(req, res) {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
-  const ping = setInterval(() => res.write(': ping\n\n'), 30000);
-  addClient(schoolId, res);
+  // addClient owns the per-connection heartbeat and enforces the per-school
+  // connection cap. A false return means the cap is reached — reject cleanly.
+  if (!addClient(schoolId, res)) {
+    res.write('event: error\ndata: {"error":"too_many_connections"}\n\n');
+    res.end();
+    return;
+  }
 
   req.on('close', () => {
-    clearInterval(ping);
     removeClient(schoolId, res);
   });
 }

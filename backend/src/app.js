@@ -243,6 +243,7 @@ async function shutdown(signal) {
     await stopTxQueueWorker();
     await closeQueue();
     await bullMQRetryService.shutdownQueue();
+    await require('./services/sseService').close();
     logger.info('BullMQ resources closed cleanly');
   } catch (err) {
     logger.error('Error closing BullMQ resources during shutdown', { error: err.message });

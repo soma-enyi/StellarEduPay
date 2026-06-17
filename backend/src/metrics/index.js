@@ -73,6 +73,36 @@ new client.Gauge({
   },
 });
 
+// sse_connected_clients / sse_active_schools — current SSE fan-out registry
+// size on this replica, read live from the SSE service on each scrape.
+new client.Gauge({
+  name: 'sse_connected_clients',
+  help: 'Number of currently connected SSE clients on this replica',
+  registers: [registry],
+  collect() {
+    try {
+      const { connections } = require('../services/sseService').getStats();
+      this.set(connections);
+    } catch (_) {
+      // SSE service not loaded — scrape still succeeds
+    }
+  },
+});
+
+new client.Gauge({
+  name: 'sse_active_schools',
+  help: 'Number of schools with at least one connected SSE client on this replica',
+  registers: [registry],
+  collect() {
+    try {
+      const { schools } = require('../services/sseService').getStats();
+      this.set(schools);
+    } catch (_) {
+      // SSE service not loaded — scrape still succeeds
+    }
+  },
+});
+
 // http_request_duration_seconds{method,route,status} — recorded per request
 // in the requestLogger middleware, which already captures these fields.
 const httpRequestDurationSeconds = new client.Histogram({
